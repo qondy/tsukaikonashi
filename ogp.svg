@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#d35400"/>
+  <g transform="translate(600 240) scale(3.6) translate(-32 -32)" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 24 H50 L47 54 H17 Z"/><path d="M24 24 V19 C24 14 27.5 10 32 10 C36.5 10 40 14 40 19 V24"/><path d="M24 39 L30 45 L41 34"/></g>
+  <text x="600" y="480" font-size="76" font-weight="600" text-anchor="middle" fill="#ffffff" font-family="-apple-system, 'Hiragino Sans', 'Noto Sans JP', sans-serif" letter-spacing="-2">つかいこなし帳</text>
+</svg>
