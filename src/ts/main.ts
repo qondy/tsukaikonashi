@@ -6,7 +6,7 @@ import { loadImage, processPhoto, thumbFromDataUrl } from './image';
 import { SAMPLE_ITEMS } from './samples';
 import {
   createCategory, createItem, deleteCategory, deleteItem, ensureDefaultCategories, loadPhotos,
-  MAX_CATEGORIES, MAX_FEATURES, MAX_FEATURE_TEXT, MAX_MANUALS, MAX_PHOTOS, newId, renameCategory,
+  MAX_CATEGORIES, MAX_FEATURES, MAX_PRICE, MAX_FEATURE_TEXT, MAX_MANUALS, MAX_PHOTOS, newId, renameCategory,
   safeUrl, subscribeCategories, subscribeItems, updateFeatures, updateItem,
 } from './store';
 import { Category, Feature, FeatureStatus, Item, ItemData, ManualLink } from './types';
@@ -99,6 +99,7 @@ const photoInput = $<HTMLInputElement>('input-photo');
 const nameInput = $<HTMLInputElement>('input-name');
 const makerInput = $<HTMLInputElement>('input-maker');
 const purchasedInput = $<HTMLInputElement>('input-purchased');
+const priceInput = $<HTMLInputElement>('input-price');
 const categorySelect = $<HTMLSelectElement>('input-category');
 const featuresField = $('field-features');
 const featuresInput = $<HTMLTextAreaElement>('input-features');
@@ -129,6 +130,17 @@ function todayStr(): string {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+const formatYen = (n: number): string => `¥${n.toLocaleString('ja-JP')}`;
+
+/** 「12,800」「１２８００円」「¥12800」などを数値にする。空欄は null、読めなければ NaN */
+function parsePrice(raw: string): number | null {
+  const s = raw
+    .replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+    .replace(/[\s,，、¥￥円]/g, '');
+  if (!s) return null;
+  return /^\d+$/.test(s) ? Number(s) : NaN;
 }
 
 function formatDate(s: string): string {
@@ -199,6 +211,9 @@ function filteredItems(): Item[] {
         return b.createdAt - a.createdAt;
       case 'name':
         return byName(a, b);
+      case 'price':
+        // 値段が高い順（未入力は最後）
+        return (b.price ?? -1) - (a.price ?? -1) || byName(a, b);
       default:
         // 買った日が新しい順（未入力は登録日で代用）
         return (b.purchasedAt || toDateStr(b.createdAt)).localeCompare(a.purchasedAt || toDateStr(a.createdAt)) || b.createdAt - a.createdAt;
@@ -279,6 +294,7 @@ function renderItemCard(item: Item): HTMLLIElement {
   if (item.maker) metaParts.push(item.maker);
   const days = daysSince(item.purchasedAt);
   if (days !== null) metaParts.push(days === 0 ? '今日買った' : `買って${days}日`);
+  if (item.price !== null) metaParts.push(formatYen(item.price));
   if (metaParts.length) body.append(textEl('p', 'item-card__meta', metaParts.join(' ・ ')));
 
   const m = mastery(item.features);
@@ -463,6 +479,12 @@ function renderDetail(): void {
     const days = daysSince(item.purchasedAt);
     const ago = days === null ? '' : days === 0 ? '（今日）' : `（${days}日前）`;
     meta.push(`${formatDate(item.purchasedAt)}に購入${ago}`);
+  }
+  if (item.price !== null) {
+    // 買ってからの日数で割った「1日あたり」で、使うほどお得になる実感を出す
+    const days = daysSince(item.purchasedAt);
+    const perDay = days !== null && days > 0 && item.price > 0 ? `（1日あたり約${formatYen(Math.round(item.price / (days + 1)))}）` : '';
+    meta.push(`${formatYen(item.price)}${perDay}`);
   }
   $('detail-meta').textContent = meta.join(' ・ ');
 
@@ -795,7 +817,7 @@ async function onPhotoSelected(): Promise<void> {
 
 function editorState(): string {
   return JSON.stringify([
-    nameInput.value, makerInput.value, purchasedInput.value, categorySelect.value, featuresInput.value, memoInput.value,
+    nameInput.value, makerInput.value, purchasedInput.value, priceInput.value, categorySelect.value, featuresInput.value, memoInput.value,
     Array.from(manualRows.querySelectorAll('input')).map((i) => (i as HTMLInputElement).value),
     editorPhotosChanged,
   ]);
@@ -809,6 +831,7 @@ function openEditor(id: string | null): void {
   nameInput.value = item?.name ?? '';
   makerInput.value = item?.maker ?? '';
   purchasedInput.value = item ? item.purchasedAt : todayStr();
+  priceInput.value = item?.price != null ? item.price.toLocaleString('ja-JP') : '';
   purchasedInput.max = todayStr();
   const defaultCat = !item && selectedCategory !== ALL && selectedCategory !== UNCATEGORIZED ? selectedCategory : '';
   fillCategorySelect(item ? item.categoryId : defaultCat);
@@ -881,6 +904,12 @@ async function saveEditor(e: Event): Promise<void> {
     showToast('写真の処理が終わるまでお待ちください');
     return;
   }
+  const price = parsePrice(priceInput.value);
+  if (price !== null && (Number.isNaN(price) || price > MAX_PRICE)) {
+    showToast('値段は数字で入力してください（1億円未満）');
+    priceInput.focus();
+    return;
+  }
   const manuals = readManuals();
   if (manuals.invalid) {
     showToast('URLは https:// から始まる形で入力してください');
@@ -899,6 +928,7 @@ async function saveEditor(e: Event): Promise<void> {
       maker: makerInput.value,
       categoryId: categorySelect.value,
       purchasedAt: purchasedInput.value,
+      price,
       manuals: manuals.list,
       memo: memoInput.value,
       thumb,
@@ -1076,7 +1106,7 @@ async function addSamples(): Promise<void> {
       const cat = categories.find((c) => c.name === s.categoryName);
       await createItem(
         currentUser.uid,
-        { name: s.name, maker: s.maker, categoryId: cat?.id ?? '', purchasedAt: todayStr(), manuals: [], memo: s.memo, thumb: '', photoCount: 0 },
+        { name: s.name, maker: s.maker, categoryId: cat?.id ?? '', purchasedAt: todayStr(), price: null, manuals: [], memo: s.memo, thumb: '', photoCount: 0 },
         s.features.map((f) => ({ ...f, id: newId() })),
         [],
       );
@@ -1168,7 +1198,7 @@ function bindEvents(): void {
     searchQuery = searchInput.value;
     render();
   });
-  sortSelect.value = ['purchased', 'growth', 'new', 'name'].includes(sortKey) ? sortKey : 'purchased';
+  sortSelect.value = ['purchased', 'growth', 'new', 'price', 'name'].includes(sortKey) ? sortKey : 'purchased';
   sortSelect.addEventListener('change', () => {
     sortKey = sortSelect.value;
     lsSet(SORT_KEY, sortKey);

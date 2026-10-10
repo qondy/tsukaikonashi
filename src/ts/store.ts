@@ -17,6 +17,7 @@ export const MAX_URL = 500;
 export const MAX_PHOTOS = 3;
 export const MAX_CATEGORY_NAME = 20;
 export const MAX_CATEGORIES = 30;
+export const MAX_PRICE = 99_999_999;
 
 const DEFAULT_CATEGORIES = ['家電', 'ガジェット', 'キッチン', '生活雑貨', 'アウトドア', '趣味'];
 
@@ -39,6 +40,11 @@ export function safeUrl(v: unknown): string {
 
 export function safeDate(v: unknown): string {
   return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : '';
+}
+
+/** 0〜上限の整数（円）だけを受け付ける。それ以外は未入力扱い */
+export function safePrice(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= MAX_PRICE ? Math.floor(v) : null;
 }
 
 export function newId(): string {
@@ -78,6 +84,7 @@ function sanitize(data: ItemData): ItemData {
     maker: data.maker.trim().slice(0, MAX_MAKER),
     categoryId: data.categoryId.slice(0, 40),
     purchasedAt: safeDate(data.purchasedAt),
+    price: safePrice(data.price),
     manuals: normManuals(data.manuals),
     memo: data.memo.slice(0, MAX_MEMO),
     thumb: isSafeImageDataUrl(data.thumb, MAX_THUMB_CHARS) ? data.thumb : '',
@@ -110,6 +117,7 @@ export function subscribeItems(
         maker: str(data.maker, MAX_MAKER),
         categoryId: str(data.categoryId, 40),
         purchasedAt: safeDate(data.purchasedAt),
+        price: safePrice(data.price),
         manuals: normManuals(data.manuals),
         memo: str(data.memo, MAX_MEMO),
         thumb: isSafeImageDataUrl(data.thumb, MAX_THUMB_CHARS) ? data.thumb : '',

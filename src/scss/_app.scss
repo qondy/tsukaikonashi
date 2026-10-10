@@ -844,6 +844,26 @@
   gap: 0 $spacing-md;
 }
 
+.price-input {
+  position: relative;
+
+  input[type='text'] {
+    padding-right: 40px;
+    text-align: right;
+  }
+
+  &__unit {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: $font-size-sm;
+    font-weight: 700;
+    color: $color-text-muted;
+    pointer-events: none;
+  }
+}
+
 .photo-picker {
   display: flex;
   flex-wrap: wrap;

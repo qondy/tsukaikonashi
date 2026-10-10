@@ -83,6 +83,7 @@
               <option value="purchased">買った日が新しい順</option>
               <option value="growth">伸びしろが大きい順</option>
               <option value="new">登録が新しい順</option>
+              <option value="price">値段が高い順</option>
               <option value="name">名前順</option>
             </select>
           </label>
@@ -208,9 +209,18 @@
           <input type="date" id="input-purchased" />
         </div>
       </div>
-      <div class="field">
-        <label class="field__label" for="input-category">カテゴリ</label>
-        <select id="input-category" class="select"></select>
+      <div class="field-row">
+        <div class="field">
+          <label class="field__label" for="input-category">カテゴリ</label>
+          <select id="input-category" class="select"></select>
+        </div>
+        <div class="field">
+          <label class="field__label" for="input-price">値段</label>
+          <div class="price-input">
+            <input type="text" id="input-price" inputmode="numeric" maxlength="14" placeholder="例：12800" autocomplete="off" />
+            <span class="price-input__unit">円</span>
+          </div>
+        </div>
       </div>
 
       <div class="field" id="field-features">

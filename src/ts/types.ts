@@ -18,6 +18,7 @@ export interface ItemData {
   maker: string;
   categoryId: string; // '' は未分類
   purchasedAt: string; // 'YYYY-MM-DD' または ''
+  price: number | null; // 円（税込みなど自由）。未入力は null
   manuals: ManualLink[];
   memo: string;
   thumb: string; // 一覧用の小さな写真（data URL）または ''

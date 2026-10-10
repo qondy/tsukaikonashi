@@ -35,10 +35,12 @@ function clamp(): void {
 function apply(): void {
   clamp();
   if (!image) return;
-  const f = frameSize();
-  image.style.width = `${dispW() * f}px`;
-  image.style.height = `${dispH() * f}px`;
-  image.style.transform = `translate(${posX * f}px, ${posY * f}px)`;
+  // 枠に対する割合で指定する。キーボードの開閉などで枠の大きさが変わっても、
+  // 正方形の写真ならいつも枠いっぱい・中央に表示される
+  image.style.width = `${dispW() * 100}%`;
+  image.style.height = `${dispH() * 100}%`;
+  image.style.left = `${posX * 100}%`;
+  image.style.top = `${posY * 100}%`;
 }
 
 /** 枠の中心を保ったまま拡大率を変える */
@@ -102,9 +104,6 @@ frame.addEventListener('wheel', (e) => {
 }, { passive: false });
 
 zoomInput.addEventListener('input', () => setZoom(Number(zoomInput.value)));
-window.addEventListener('resize', () => {
-  if (resolver) apply();
-});
 
 document.getElementById('btn-crop-ok')?.addEventListener('click', () => finish(currentCrop()));
 document.getElementById('btn-crop-cancel')?.addEventListener('click', () => finish(null));
