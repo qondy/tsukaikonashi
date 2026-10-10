@@ -236,6 +236,32 @@
     </form>
   </div>
 
+  <!-- 写真を正方形に切り抜く -->
+  <div id="crop-overlay" class="dialog-overlay">
+    <div class="modal cropper" role="dialog" aria-modal="true" aria-labelledby="crop-title">
+      <div class="modal__head">
+        <div class="modal__title" id="crop-title">写真の範囲を選ぶ <span class="cropper__progress hidden" id="crop-progress"></span></div>
+        <button type="button" id="btn-crop-close" class="modal__close" aria-label="閉じる">&times;</button>
+      </div>
+      <p class="cropper__lead">写真は正方形で保存されます。ドラッグで位置を、スライダーで大きさを調整してください。</p>
+      <div class="cropper__frame" id="crop-frame" aria-label="切り抜き範囲（ドラッグで移動）"></div>
+      <div class="cropper__zoom">
+        <svg width="16" height="16" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="28" cy="28" r="16"/><path d="M40 40 L54 54"/><path d="M21 28 H35"/></svg>
+        <input type="range" id="input-crop-zoom" min="1" max="3" step="0.01" value="1" aria-label="拡大率" />
+        <svg width="20" height="20" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="28" cy="28" r="16"/><path d="M40 40 L54 54"/><path d="M21 28 H35"/><path d="M28 21 V35"/></svg>
+      </div>
+      <div class="modal__actions modal__actions--split">
+        <div class="modal__actions-left">
+          <button type="button" id="btn-crop-reset" class="btn btn--ghost">中央に戻す</button>
+        </div>
+        <div class="modal__actions-right">
+          <button type="button" id="btn-crop-cancel" class="btn btn--ghost">この写真をやめる</button>
+          <button type="button" id="btn-crop-ok" class="btn btn--primary">この範囲で追加</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- できることの編集 -->
   <div id="feature-overlay" class="dialog-overlay">
     <form id="feature-form" class="modal" novalidate>

@@ -1,7 +1,8 @@
 import { User } from 'firebase/auth';
 import { loginWithGoogle, logout, onAuthChange } from './auth';
 import { submitFeedback } from './feedback';
-import { processPhoto, thumbFromDataUrl } from './image';
+import { cancelCropper, chooseSquareCrop } from './cropper';
+import { loadImage, processPhoto, thumbFromDataUrl } from './image';
 import { SAMPLE_ITEMS } from './samples';
 import {
   createCategory, createItem, deleteCategory, deleteItem, ensureDefaultCategories, loadPhotos,
@@ -85,6 +86,7 @@ const nextList = $<HTMLUListElement>('next-list');
 const detailOverlay = $('detail-overlay');
 const editorOverlay = $('editor-overlay');
 const editorForm = $<HTMLFormElement>('editor-form');
+const cropOverlay = $('crop-overlay');
 const featureOverlay = $('feature-overlay');
 const categoryOverlay = $('category-overlay');
 const discardOverlay = $('discard-dialog-overlay');
@@ -769,11 +771,17 @@ async function onPhotoSelected(): Promise<void> {
   if (files.length > room) showToast(`写真は${MAX_PHOTOS}枚までです。先頭の${room}枚を追加します`);
   photoBusy = true;
   renderPhotoPicker();
+  const targets = files.slice(0, room);
   try {
-    for (const file of files.slice(0, room)) {
+    for (let i = 0; i < targets.length; i++) {
+      const file = targets[i];
       try {
-        const { photo } = await processPhoto(file);
-        editorPhotos.push(photo);
+        if (!file.type.startsWith('image/')) throw new Error('画像ファイルを選んでください');
+        const img = await loadImage(file);
+        // 正方形で保存するので、切り抜く範囲を選んでもらう
+        const crop = await chooseSquareCrop(img, targets.length > 1 ? `${i + 1} / ${targets.length}` : '');
+        if (!crop || !editorOverlay.classList.contains('is-open')) continue;
+        editorPhotos.push(processPhoto(img, crop));
         editorPhotosChanged = true;
       } catch (err) {
         showToast(errMessage(err, 'この画像は追加できませんでした'));
@@ -853,6 +861,7 @@ function requestCloseEditor(): void {
 }
 
 function closeEditor(): void {
+  cancelCropper();
   closeOverlay(editorOverlay);
   closeOverlay(discardOverlay);
   editingId = null;
@@ -1126,7 +1135,7 @@ function endSession(): void {
   itemList.textContent = '';
   loadingEl.classList.remove('hidden');
   loadingEl.textContent = '読み込み中…';
-  [detailOverlay, editorOverlay, featureOverlay, categoryOverlay, discardOverlay, confirmOverlay].forEach(closeOverlay);
+  [detailOverlay, editorOverlay, cropOverlay, featureOverlay, categoryOverlay, discardOverlay, confirmOverlay].forEach(closeOverlay);
   detailId = null;
   appEl.classList.add('hidden');
   loginScreen.classList.remove('hidden');
@@ -1255,6 +1264,7 @@ function bindEvents(): void {
   const closers: [HTMLElement, () => void][] = [
     [detailOverlay, closeDetail],
     [editorOverlay, requestCloseEditor],
+    [cropOverlay, cancelCropper],
     [featureOverlay, () => closeOverlay(featureOverlay)],
     [categoryOverlay, () => closeOverlay(categoryOverlay)],
     [discardOverlay, () => closeOverlay(discardOverlay)],
