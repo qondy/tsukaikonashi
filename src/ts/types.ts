@@ -7,8 +7,12 @@ export interface Feature {
   status: FeatureStatus;
 }
 
+/** リンクの種類。product=商品ページ（既定） / manual=取扱説明書 */
+export type LinkKind = 'product' | 'manual';
+
 export interface ManualLink {
-  label: string;
+  kind: LinkKind;
+  label: string; // '' のときは種類名で表示する
   url: string;
 }
 

@@ -2,7 +2,7 @@ import {
   collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, getDoc, writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Category, Feature, FeatureStatus, Item, ItemData, ManualLink } from './types';
+import { Category, Feature, FeatureStatus, Item, ItemData, LinkKind, ManualLink } from './types';
 import { isSafeImageDataUrl, MAX_PHOTO_CHARS, MAX_THUMB_CHARS } from './image';
 
 export const MAX_NAME = 60;
@@ -14,6 +14,7 @@ export const MAX_FEATURE_NOTE = 300;
 export const MAX_MANUALS = 5;
 export const MAX_MANUAL_LABEL = 30;
 export const MAX_URL = 500;
+export const LINK_KIND_LABEL: Record<LinkKind, string> = { product: '商品ページ', manual: '取扱説明書' };
 export const MAX_PHOTOS = 3;
 export const MAX_CATEGORY_NAME = 20;
 export const MAX_CATEGORIES = 30;
@@ -73,7 +74,11 @@ function normManuals(v: unknown): ManualLink[] {
     const o = m as Record<string, unknown>;
     const url = safeUrl(o.url);
     if (!url) return;
-    out.push({ label: str(o.label, MAX_MANUAL_LABEL).trim() || '説明書', url });
+    // 種類の導入前に登録されたリンクは「説明書・リンク」欄のものなので取扱説明書として扱う
+    const kind: LinkKind = o.kind === 'product' ? 'product' : 'manual';
+    let label = str(o.label, MAX_MANUAL_LABEL).trim();
+    if (label === '説明書' || label === LINK_KIND_LABEL[kind]) label = '';
+    out.push({ kind, label, url });
   });
   return out;
 }

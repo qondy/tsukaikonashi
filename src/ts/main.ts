@@ -6,10 +6,10 @@ import { loadImage, processPhoto, thumbFromDataUrl } from './image';
 import { SAMPLE_ITEMS } from './samples';
 import {
   createCategory, createItem, deleteCategory, deleteItem, ensureDefaultCategories, loadPhotos,
-  MAX_CATEGORIES, MAX_FEATURES, MAX_PRICE, MAX_FEATURE_TEXT, MAX_MANUALS, MAX_PHOTOS, newId, renameCategory,
+  LINK_KIND_LABEL, MAX_CATEGORIES, MAX_FEATURES, MAX_PRICE, MAX_FEATURE_TEXT, MAX_MANUALS, MAX_PHOTOS, newId, renameCategory,
   safeUrl, subscribeCategories, subscribeItems, updateFeatures, updateItem,
 } from './store';
-import { Category, Feature, FeatureStatus, Item, ItemData, ManualLink } from './types';
+import { Category, Feature, FeatureStatus, Item, ItemData, LinkKind, ManualLink } from './types';
 import { button, closeOverlay, iconEl, openOverlay, showToast, textEl } from './ui';
 
 // ============================================================
@@ -544,27 +544,35 @@ function renderDetail(): void {
   ($('input-feature-new') as HTMLInputElement).disabled = full;
   ($('btn-feature-add') as HTMLButtonElement).disabled = full;
 
-  // 説明書
+  // 商品ページ・取扱説明書（商品ページを先に）
   const manuals = $<HTMLUListElement>('detail-manuals');
   manuals.textContent = '';
   if (!item.manuals.length) {
-    manuals.append(textEl('li', 'manual-links__empty', '「基本情報・写真を編集」から、説明書PDFやサポートページのURLを登録できます。'));
+    manuals.append(textEl('li', 'manual-links__empty', '「基本情報・写真を編集」から、商品ページや取扱説明書のURLを登録できます。'));
   }
-  item.manuals.forEach((mn) => {
+  const kindOrder: LinkKind[] = ['product', 'manual'];
+  [...item.manuals].sort((a, b) => kindOrder.indexOf(a.kind) - kindOrder.indexOf(b.kind)).forEach((mn) => {
     const li = document.createElement('li');
     const a = document.createElement('a');
     a.className = 'manual-link';
     a.href = mn.url; // 保存時・読込時に http/https のみに検証済み
     a.target = '_blank';
     a.rel = 'noopener noreferrer';
-    a.append(iconEl(svg(ICON_LINK, 18), 'manual-link__icon'), textEl('span', 'manual-link__label', mn.label));
     let host = '';
     try {
       host = new URL(mn.url).hostname;
     } catch {
       host = '';
     }
-    if (host) a.append(textEl('span', 'manual-link__host', host));
+    // 名前が未入力なら種類名と重複しないよう、ドメインを名前代わりに出す
+    const body = document.createElement('span');
+    body.className = 'manual-link__body';
+    body.append(
+      textEl('span', `manual-link__kind manual-link__kind--${mn.kind}`, LINK_KIND_LABEL[mn.kind]),
+      textEl('span', 'manual-link__label', mn.label || host || LINK_KIND_LABEL[mn.kind]),
+    );
+    a.append(iconEl(svg(ICON_LINK, 18), 'manual-link__icon'), body);
+    if (host && mn.label) a.append(textEl('span', 'manual-link__host', host));
     li.append(a);
     manuals.append(li);
   });
@@ -695,20 +703,30 @@ function fillCategorySelect(selected: string): void {
   categorySelect.value = categories.some((c) => c.id === selected) ? selected : '';
 }
 
-function addManualRow(m: ManualLink = { label: '', url: '' }): void {
+function addManualRow(m: ManualLink = { kind: 'product', label: '', url: '' }): void {
   if (manualRows.children.length >= MAX_MANUALS) {
     showToast(`リンクは${MAX_MANUALS}件まで登録できます`);
     return;
   }
   const row = document.createElement('div');
   row.className = 'manual-row';
+  const kind = document.createElement('select');
+  kind.className = 'select manual-row__kind';
+  kind.setAttribute('aria-label', 'リンクの種類');
+  (Object.keys(LINK_KIND_LABEL) as LinkKind[]).forEach((k) => {
+    const o = document.createElement('option');
+    o.value = k;
+    o.textContent = LINK_KIND_LABEL[k];
+    kind.append(o);
+  });
+  kind.value = m.kind;
   const label = document.createElement('input');
   label.type = 'text';
   label.className = 'manual-row__label';
   label.maxLength = 30;
-  label.placeholder = '名前（例：取扱説明書）';
+  label.placeholder = '名前';
   label.value = m.label;
-  label.setAttribute('aria-label', 'リンクの名前');
+  label.setAttribute('aria-label', 'リンクの名前（省略可）');
   const url = document.createElement('input');
   url.type = 'url';
   url.className = 'manual-row__url';
@@ -719,14 +737,14 @@ function addManualRow(m: ManualLink = { label: '', url: '' }): void {
   url.setAttribute('aria-label', 'URL');
   const del = document.createElement('button');
   del.type = 'button';
-  del.className = 'icon-btn';
+  del.className = 'icon-btn manual-row__del';
   del.setAttribute('aria-label', 'このリンクを削除');
   del.append(iconEl(svg(ICON_TRASH, 16), ''));
   del.addEventListener('click', () => {
     row.remove();
     updateManualAddBtn();
   });
-  row.append(label, url, del);
+  row.append(kind, label, url, del);
   manualRows.append(row);
   updateManualAddBtn();
 }
@@ -739,6 +757,7 @@ function readManuals(): { list: ManualLink[]; invalid: boolean } {
   const list: ManualLink[] = [];
   let invalid = false;
   manualRows.querySelectorAll<HTMLElement>('.manual-row').forEach((row) => {
+    const kind: LinkKind = (row.querySelector('.manual-row__kind') as HTMLSelectElement).value === 'manual' ? 'manual' : 'product';
     const label = (row.querySelector('.manual-row__label') as HTMLInputElement).value.trim();
     const raw = (row.querySelector('.manual-row__url') as HTMLInputElement).value.trim();
     if (!raw && !label) return;
@@ -747,7 +766,7 @@ function readManuals(): { list: ManualLink[]; invalid: boolean } {
       invalid = true;
       return;
     }
-    list.push({ label: label || '説明書', url });
+    list.push({ kind, label, url });
   });
   return { list, invalid };
 }
@@ -818,7 +837,7 @@ async function onPhotoSelected(): Promise<void> {
 function editorState(): string {
   return JSON.stringify([
     nameInput.value, makerInput.value, purchasedInput.value, priceInput.value, categorySelect.value, featuresInput.value, memoInput.value,
-    Array.from(manualRows.querySelectorAll('input')).map((i) => (i as HTMLInputElement).value),
+    Array.from(manualRows.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select')).map((i) => i.value),
     editorPhotosChanged,
   ]);
 }
@@ -840,7 +859,10 @@ function openEditor(id: string | null): void {
   memoInput.value = item?.memo ?? '';
   manualRows.textContent = '';
   (item?.manuals ?? []).forEach((m) => addManualRow(m));
-  if (!item) addManualRow();
+  if (!item) {
+    addManualRow();
+    addManualRow({ kind: 'manual', label: '', url: '' });
+  }
   updateManualAddBtn();
 
   if (item && item.photoCount > 0) {
