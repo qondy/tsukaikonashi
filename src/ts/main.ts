@@ -5,11 +5,11 @@ import { cancelCropper, chooseSquareCrop } from './cropper';
 import { loadImage, processPhoto, thumbFromDataUrl } from './image';
 import { SAMPLE_ITEMS } from './samples';
 import {
-  createCategory, createItem, deleteCategory, deleteItem, ensureDefaultCategories, loadPhotos,
-  LINK_KIND_LABEL, MAX_CATEGORIES, MAX_FEATURES, MAX_PRICE, MAX_FEATURE_TEXT, MAX_MANUALS, MAX_PHOTOS, newId, renameCategory,
-  safeUrl, subscribeCategories, subscribeItems, updateFeatures, updateItem,
+  CARE_INTERVALS, createCategory, createItem, deleteCategory, deleteItem, ensureDefaultCategories, loadPhotos,
+  LINK_KIND_LABEL, MAX_CARE, MAX_CARE_TEXT, MAX_CATEGORIES, MAX_FEATURES, MAX_PRICE, MAX_FEATURE_TEXT, MAX_MANUALS, MAX_PHOTOS, newId, renameCategory,
+  safeDate, safeUrl, subscribeCategories, subscribeItems, updateCare, updateFeatures, updateItem,
 } from './store';
-import { Category, Feature, FeatureStatus, Item, ItemData, LinkKind, ManualLink } from './types';
+import { CareTask, Category, Feature, FeatureStatus, Item, ItemData, LinkKind, ManualLink } from './types';
 import { button, closeOverlay, iconEl, openOverlay, showToast, textEl } from './ui';
 
 // ============================================================
@@ -28,6 +28,17 @@ const STATUS_LABEL: Record<FeatureStatus, string> = { todo: 'まだ', tried: '�
 const SORT_KEY = 'tsukaikonashi:sort';
 const CATEGORY_KEY = 'tsukaikonashi:category';
 const UNCATEGORIZED = '__none__';
+
+/** よくあるお手入れ（タップで周期つきで追加） */
+const CARE_SUGGESTIONS: { text: string; intervalDays: number }[] = [
+  { text: '本体を拭く', intervalDays: 7 },
+  { text: '画面・レンズを拭く', intervalDays: 7 },
+  { text: '端子・すき間のホコリ取り', intervalDays: 30 },
+  { text: 'フィルター掃除', intervalDays: 14 },
+  { text: 'ソフトウェアの更新を確認', intervalDays: 30 },
+  { text: '消耗品の点検・交換', intervalDays: 90 },
+  { text: 'バッテリーの状態チェック', intervalDays: 90 },
+];
 const ALL = '__all__';
 
 // ============================================================
@@ -59,6 +70,7 @@ let editorBusy = false;
 let photoBusy = false;
 
 let editingFeatureId: string | null = null;
+let editingCareId: string | null = null;
 let confirmAction: (() => Promise<void>) | null = null;
 
 // ============================================================
@@ -82,12 +94,15 @@ const searchInput = $<HTMLInputElement>('input-search');
 const sortSelect = $<HTMLSelectElement>('select-sort');
 const nextSection = $('next-section');
 const nextList = $<HTMLUListElement>('next-list');
+const careSection = $('care-section');
+const careList = $<HTMLUListElement>('care-list');
 
 const detailOverlay = $('detail-overlay');
 const editorOverlay = $('editor-overlay');
 const editorForm = $<HTMLFormElement>('editor-form');
 const cropOverlay = $('crop-overlay');
 const featureOverlay = $('feature-overlay');
+const careOverlay = $('care-overlay');
 const categoryOverlay = $('category-overlay');
 const discardOverlay = $('discard-dialog-overlay');
 const confirmOverlay = $('confirm-dialog-overlay');
@@ -168,6 +183,49 @@ function mastery(features: Feature[]): { pct: number; todo: number; tried: numbe
   return { pct, todo: n - tried - mastered, tried, mastered };
 }
 
+function intervalLabel(days: number): string {
+  const map: Record<number, string> = {
+    0: '気づいたときに', 1: '毎日', 3: '3日ごと', 7: '毎週', 14: '2週間ごと', 30: '毎月',
+    60: '2か月ごと', 90: '3か月ごと', 180: '半年ごと', 365: '1年ごと',
+  };
+  return map[days] ?? `${days}日ごと`;
+}
+
+type CareState = 'free' | 'never' | 'due' | 'soon' | 'ok';
+
+/** お手入れの時期。remain は次回までの日数（マイナスは過ぎた日数） */
+function careState(t: CareTask): { state: CareState; remain: number } {
+  if (!t.intervalDays) return { state: 'free', remain: 0 };
+  if (!t.lastDoneAt) return { state: 'never', remain: 0 };
+  const remain = t.intervalDays - (daysSince(t.lastDoneAt) ?? 0);
+  if (remain <= 0) return { state: 'due', remain };
+  // 周期の2割（最低1日）を切ったら「そろそろ」
+  return { state: remain <= Math.max(1, Math.round(t.intervalDays * 0.2)) ? 'soon' : 'ok', remain };
+}
+
+function isCareDue(t: CareTask): boolean {
+  const { state } = careState(t);
+  return state === 'due' || state === 'never';
+}
+
+function careStatusText(t: CareTask): string {
+  const { state, remain } = careState(t);
+  switch (state) {
+    case 'never':
+      return 'まだ記録なし';
+    case 'due':
+      return remain === 0 ? '今日がお手入れ日' : `${-remain}日過ぎています`;
+    case 'soon':
+    case 'ok':
+      return `あと${remain}日`;
+    default: {
+      if (!t.lastDoneAt) return 'まだ記録なし';
+      const [, m, d] = t.lastDoneAt.split('-').map(Number);
+      return `前回 ${m}/${d}`;
+    }
+  }
+}
+
 function categoryName(id: string): string {
   return categories.find((c) => c.id === id)?.name ?? '';
 }
@@ -192,7 +250,7 @@ function filteredItems(): Item[] {
       return false;
     }
     if (!q) return true;
-    const hay = [item.name, item.maker, item.memo, categoryName(item.categoryId), ...item.features.map((f) => `${f.text} ${f.note}`)]
+    const hay = [item.name, item.maker, item.memo, categoryName(item.categoryId), ...item.features.map((f) => `${f.text} ${f.note}`), ...item.care.map((c) => `${c.text} ${c.note}`)]
       .join(' ')
       .toLowerCase();
     return hay.includes(q);
@@ -317,6 +375,8 @@ function renderItemCard(item: Item): HTMLLIElement {
     prog.append(textEl('p', 'progress__hint', 'できることを登録しよう'));
   }
   body.append(prog);
+  const dueCare = item.care.filter(isCareDue).length;
+  if (dueCare) body.append(textEl('p', 'item-card__care', `お手入れの時期 ${dueCare}`));
 
   b.append(thumb, body);
   li.append(b);
@@ -357,10 +417,45 @@ function renderNext(): void {
   });
 }
 
+/** 時期が来たお手入れ（過ぎている日数が多い順、まだ一度もしていないものは最後） */
+function renderCareDue(): void {
+  const due: { item: Item; task: CareTask; remain: number }[] = [];
+  items.forEach((item) => item.care.forEach((task) => {
+    const { state, remain } = careState(task);
+    if (state === 'due') due.push({ item, task, remain });
+    else if (state === 'never') due.push({ item, task, remain: 1 });
+  }));
+  careList.textContent = '';
+  if (!due.length) {
+    careSection.classList.add('hidden');
+    return;
+  }
+  careSection.classList.remove('hidden');
+  due.sort((a, b) => a.remain - b.remain);
+  const LIMIT = 4;
+  due.slice(0, LIMIT).forEach(({ item, task }) => {
+    const li = document.createElement('li');
+    li.className = 'next__item';
+    const info = document.createElement('button');
+    info.type = 'button';
+    info.className = 'next__info';
+    info.append(textEl('span', 'next__feature', task.text), textEl('span', 'next__product', `${item.name} ・ ${careStatusText(task)}`));
+    info.addEventListener('click', () => openDetail(item.id));
+    const done = button('やった', 'btn btn--ghost btn--sm care-done', () => {
+      void markCareDone(item.id, task.id, done);
+    });
+    li.append(info, done);
+    careList.append(li);
+  });
+  const rest = due.length - LIMIT;
+  $('care-more').textContent = rest > 0 ? `ほか${rest}件` : '';
+}
+
 function render(): void {
   if (!itemsLoaded) return;
   loadingEl.classList.add('hidden');
   renderCategoryBar();
+  renderCareDue();
   renderNext();
 
   itemList.textContent = '';
@@ -544,6 +639,8 @@ function renderDetail(): void {
   ($('input-feature-new') as HTMLInputElement).disabled = full;
   ($('btn-feature-add') as HTMLButtonElement).disabled = full;
 
+  renderDetailCare(item);
+
   // 商品ページ・取扱説明書（商品ページを先に）
   const manuals = $<HTMLUListElement>('detail-manuals');
   manuals.textContent = '';
@@ -579,6 +676,211 @@ function renderDetail(): void {
 
   $('detail-memo').textContent = item.memo;
   $('detail-memo-section').classList.toggle('hidden', !item.memo);
+}
+
+function renderDetailCare(item: Item): void {
+  const total = item.care.reduce((acc, c) => acc + c.doneCount, 0);
+  $('detail-care-total').textContent = total ? `これまで ${total}回お手入れ` : '';
+
+  const list = $<HTMLUListElement>('detail-care');
+  list.textContent = '';
+  if (!item.care.length) {
+    list.append(textEl('li', 'feature-list__empty', '拭き掃除や消耗品の交換など、長く大切に使うためのお手入れを登録しましょう。時期が来たら一覧の上でお知らせします。'));
+  }
+  item.care.forEach((c) => {
+    const { state } = careState(c);
+    const li = document.createElement('li');
+    li.className = `feature care-task care-task--${state}`;
+    const main = document.createElement('div');
+    main.className = 'feature__main';
+    main.append(textEl('p', 'feature__text', c.text));
+    const meta = document.createElement('p');
+    meta.className = 'care-task__meta';
+    meta.append(
+      textEl('span', 'care-task__interval', intervalLabel(c.intervalDays)),
+      textEl('span', 'care-task__status', careStatusText(c)),
+    );
+    if (c.doneCount) meta.append(textEl('span', 'care-task__count', `${c.doneCount}回`));
+    main.append(meta);
+    if (c.note) main.append(textEl('p', 'feature__note', c.note));
+
+    const done = button('やった', 'btn btn--ghost btn--sm care-done', () => {
+      void markCareDone(item.id, c.id, done);
+    });
+    done.setAttribute('aria-label', `${c.text}をやった`);
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.className = 'icon-btn feature__edit';
+    edit.setAttribute('aria-label', `${c.text}を編集`);
+    edit.append(iconEl(svg(ICON_EDIT, 16), ''));
+    edit.addEventListener('click', () => openCareEditor(c.id));
+
+    const side = document.createElement('div');
+    side.className = 'feature__side';
+    side.append(done, edit);
+    li.append(main, side);
+    list.append(li);
+  });
+
+  // よくあるお手入れ（登録済みのものは出さない。数が少ないうちだけ表示）
+  const sugg = $('care-suggest');
+  sugg.textContent = '';
+  const have = new Set(item.care.map((c) => c.text));
+  const left = CARE_SUGGESTIONS.filter((x) => !have.has(x.text));
+  if (item.care.length < 3 && left.length) {
+    sugg.append(textEl('span', 'care-suggest__label', 'よくあるお手入れ：'));
+    left.forEach((x) => {
+      const b = button(`＋ ${x.text}`, 'category-chip care-suggest__chip', () => {
+        void addCare(item.id, x.text, x.intervalDays, b);
+      });
+      sugg.append(b);
+    });
+  }
+  const full = item.care.length >= MAX_CARE;
+  sugg.classList.toggle('hidden', full || !sugg.childElementCount);
+  ($('input-care-new') as HTMLInputElement).disabled = full;
+  ($('btn-care-add') as HTMLButtonElement).disabled = full;
+}
+
+const careBusy = new Set<string>();
+
+async function addCare(itemId: string, text: string, intervalDays: number, btn: HTMLButtonElement): Promise<boolean> {
+  const item = findItem(itemId);
+  if (!item || !currentUser || careBusy.has(itemId)) return false;
+  if (item.care.length >= MAX_CARE) {
+    showToast(`お手入れは${MAX_CARE}件まで登録できます`);
+    return false;
+  }
+  careBusy.add(itemId);
+  btn.disabled = true;
+  try {
+    await updateCare(currentUser.uid, itemId, [...item.care, { id: newId(), text, note: '', intervalDays, lastDoneAt: '', doneCount: 0 }]);
+    return true;
+  } catch {
+    showToast('追加に失敗しました');
+    return false;
+  } finally {
+    careBusy.delete(itemId);
+    btn.disabled = false;
+  }
+}
+
+async function submitCareAdd(e: Event): Promise<void> {
+  e.preventDefault();
+  const input = $<HTMLInputElement>('input-care-new');
+  const text = input.value.trim().slice(0, MAX_CARE_TEXT);
+  if (!text || !detailId) {
+    input.focus();
+    return;
+  }
+  const interval = Number($<HTMLSelectElement>('select-care-new').value) || 0;
+  if (await addCare(detailId, text, interval, $<HTMLButtonElement>('btn-care-add'))) {
+    input.value = '';
+    input.focus();
+  }
+}
+
+/** 「やった」：前回の日付を今日にして回数を数える（同じ日の二重記録はしない） */
+async function markCareDone(itemId: string, careId: string, btn?: HTMLButtonElement): Promise<void> {
+  const item = findItem(itemId);
+  const target = item?.care.find((c) => c.id === careId);
+  if (!currentUser || !item || !target || careBusy.has(itemId)) return;
+  const today = todayStr();
+  if (target.lastDoneAt === today) {
+    showToast('今日のお手入れは記録済みです');
+    return;
+  }
+  careBusy.add(itemId);
+  if (btn) btn.disabled = true;
+  try {
+    const count = target.doneCount + 1;
+    await updateCare(currentUser.uid, itemId, item.care.map((c) => (c.id === careId ? { ...c, lastDoneAt: today, doneCount: count } : c)));
+    showToast(`「${target.text}」お手入れしました（${count}回目）`);
+  } catch {
+    showToast('保存に失敗しました。通信環境を確認してください');
+  } finally {
+    careBusy.delete(itemId);
+    if (btn) btn.disabled = false;
+  }
+}
+
+function fillIntervalSelect(sel: HTMLSelectElement, value: number): void {
+  sel.textContent = '';
+  CARE_INTERVALS.forEach((d) => {
+    const o = document.createElement('option');
+    o.value = String(d);
+    o.textContent = intervalLabel(d);
+    sel.append(o);
+  });
+  sel.value = String(value);
+}
+
+function openCareEditor(careId: string): void {
+  const c = findItem(detailId)?.care.find((x) => x.id === careId);
+  if (!c) return;
+  editingCareId = careId;
+  $<HTMLInputElement>('input-care-text').value = c.text;
+  fillIntervalSelect($<HTMLSelectElement>('select-care-interval'), c.intervalDays);
+  const last = $<HTMLInputElement>('input-care-last');
+  last.max = todayStr();
+  last.value = c.lastDoneAt;
+  $<HTMLTextAreaElement>('input-care-note').value = c.note;
+  openOverlay(careOverlay);
+  $<HTMLInputElement>('input-care-text').focus();
+}
+
+async function saveCare(e: Event): Promise<void> {
+  e.preventDefault();
+  const item = findItem(detailId);
+  const textInput = $<HTMLInputElement>('input-care-text');
+  const text = textInput.value.trim();
+  if (!text) {
+    showToast('お手入れの内容を入力してください');
+    textInput.focus();
+    return;
+  }
+  if (!item || !currentUser || !editingCareId || careBusy.has(item.id)) return;
+  const lastRaw = $<HTMLInputElement>('input-care-last').value;
+  const lastDoneAt = safeDate(lastRaw);
+  if (lastDoneAt && lastDoneAt > todayStr()) {
+    showToast('前回の日付に未来の日は選べません');
+    return;
+  }
+  const intervalDays = Number($<HTMLSelectElement>('select-care-interval').value) || 0;
+  const note = $<HTMLTextAreaElement>('input-care-note').value.trim();
+  const btn = $<HTMLButtonElement>('btn-care-save');
+  careBusy.add(item.id);
+  btn.disabled = true;
+  try {
+    await updateCare(currentUser.uid, item.id, item.care.map((c) => {
+      if (c.id !== editingCareId) return c;
+      // 日付を初めて入れたときは1回分として数える
+      const doneCount = lastDoneAt && !c.doneCount ? 1 : c.doneCount;
+      return { ...c, text, note, intervalDays, lastDoneAt, doneCount };
+    }));
+    closeOverlay(careOverlay);
+    editingCareId = null;
+  } catch {
+    showToast('保存に失敗しました');
+  } finally {
+    careBusy.delete(item.id);
+    btn.disabled = false;
+  }
+}
+
+function askDeleteCare(): void {
+  const item = findItem(detailId);
+  const c = item?.care.find((x) => x.id === editingCareId);
+  if (!item || !c) return;
+  const careId = c.id;
+  closeOverlay(careOverlay);
+  askConfirm('お手入れを削除しますか？', `「${c.text}」と、その記録を削除します。`, async () => {
+    const latest = findItem(item.id);
+    if (!currentUser || !latest) return;
+    await updateCare(currentUser.uid, latest.id, latest.care.filter((x) => x.id !== careId));
+    editingCareId = null;
+    showToast('削除しました');
+  });
 }
 
 const featureBusy = new Set<string>();
@@ -1131,6 +1433,7 @@ async function addSamples(): Promise<void> {
         { name: s.name, maker: s.maker, categoryId: cat?.id ?? '', purchasedAt: todayStr(), price: null, manuals: [], memo: s.memo, thumb: '', photoCount: 0 },
         s.features.map((f) => ({ ...f, id: newId() })),
         [],
+        s.care.map((c) => ({ ...c, id: newId(), lastDoneAt: '', doneCount: 0 })),
       );
     }
     showToast('サンプルを追加しました');
@@ -1187,7 +1490,7 @@ function endSession(): void {
   itemList.textContent = '';
   loadingEl.classList.remove('hidden');
   loadingEl.textContent = '読み込み中…';
-  [detailOverlay, editorOverlay, cropOverlay, featureOverlay, categoryOverlay, discardOverlay, confirmOverlay].forEach(closeOverlay);
+  [detailOverlay, editorOverlay, cropOverlay, featureOverlay, careOverlay, categoryOverlay, discardOverlay, confirmOverlay].forEach(closeOverlay);
   detailId = null;
   appEl.classList.add('hidden');
   loginScreen.classList.remove('hidden');
@@ -1248,7 +1551,7 @@ function bindEvents(): void {
   $('btn-detail-delete').addEventListener('click', () => {
     const item = findItem(detailId);
     if (!item) return;
-    askConfirm('製品を削除しますか？', `「${item.name}」と、写真・できること・メモをすべて削除します。元に戻せません。`, async () => {
+    askConfirm('製品を削除しますか？', `「${item.name}」と、写真・できること・お手入れ・メモをすべて削除します。元に戻せません。`, async () => {
       if (!currentUser) return;
       await deleteItem(currentUser.uid, item.id);
       closeDetail();
@@ -1262,6 +1565,14 @@ function bindEvents(): void {
   $('btn-feature-close').addEventListener('click', () => closeOverlay(featureOverlay));
   $('btn-feature-cancel').addEventListener('click', () => closeOverlay(featureOverlay));
   $('btn-feature-delete').addEventListener('click', askDeleteFeature);
+
+  // お手入れ
+  fillIntervalSelect($<HTMLSelectElement>('select-care-new'), 30);
+  $('care-add-form').addEventListener('submit', (e) => void submitCareAdd(e));
+  $('care-form').addEventListener('submit', (e) => void saveCare(e));
+  $('btn-care-close').addEventListener('click', () => closeOverlay(careOverlay));
+  $('btn-care-cancel').addEventListener('click', () => closeOverlay(careOverlay));
+  $('btn-care-delete').addEventListener('click', askDeleteCare);
 
   // 登録・編集
   editorForm.addEventListener('submit', (e) => void saveEditor(e));
@@ -1318,6 +1629,7 @@ function bindEvents(): void {
     [editorOverlay, requestCloseEditor],
     [cropOverlay, cancelCropper],
     [featureOverlay, () => closeOverlay(featureOverlay)],
+    [careOverlay, () => closeOverlay(careOverlay)],
     [categoryOverlay, () => closeOverlay(categoryOverlay)],
     [discardOverlay, () => closeOverlay(discardOverlay)],
     [confirmOverlay, () => { confirmAction = null; closeOverlay(confirmOverlay); }],

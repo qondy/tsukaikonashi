@@ -145,6 +145,34 @@
   }
 }
 
+// ===== お手入れの時期 =====
+.next--care {
+  border-color: rgba($color-care, 0.3);
+
+  .next__title {
+    color: $color-care;
+  }
+}
+
+.next__more {
+  font-size: $font-size-xs;
+  color: $color-text-muted;
+
+  &:empty {
+    display: none;
+  }
+}
+
+.care-done {
+  flex-shrink: 0;
+  background: $color-care-bg;
+  color: $color-care;
+
+  &:hover:not(:disabled) {
+    background: #cce9e5;
+  }
+}
+
 // ===== Toolbar =====
 .toolbar {
   padding: $spacing-md;
@@ -374,6 +402,16 @@
     padding-top: 6px;
     width: 100%;
   }
+
+  &__care {
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.4;
+    padding: 2px 8px;
+    border-radius: 999px;
+    color: $color-care;
+    background: $color-care-bg;
+  }
 }
 
 // ===== 使いこなし度 =====
@@ -537,6 +575,19 @@
     font-size: $font-size-base;
     font-weight: 800;
     margin-bottom: 4px;
+  }
+
+  &__section-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: $spacing-sm;
+  }
+
+  &__section-sub {
+    font-size: $font-size-xs;
+    font-weight: 700;
+    color: $color-care;
   }
 
   &__hint {
@@ -824,6 +875,75 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     max-width: 45%;
+  }
+}
+
+// ===== お手入れ =====
+.care-task {
+  border-left-color: $color-care;
+
+  &--free {
+    border-left-color: $color-status-todo;
+  }
+
+  &--never,
+  &--due {
+    border-left-color: $color-primary;
+  }
+
+  &--due {
+    background: $color-surface-2;
+  }
+
+  &__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 10px;
+    margin-top: 2px;
+    font-size: $font-size-xs;
+    color: $color-text-muted;
+  }
+
+  &__status {
+    font-weight: 700;
+    color: $color-care;
+  }
+
+  &--never &__status,
+  &--due &__status {
+    color: $color-primary-ink;
+  }
+
+  &--free &__status {
+    font-weight: 400;
+    color: $color-text-muted;
+  }
+}
+
+.care-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: $spacing-sm;
+
+  &__label {
+    font-size: $font-size-xs;
+    color: $color-text-muted;
+  }
+
+  &__chip.category-chip {
+    padding: 4px 10px;
+    font-size: $font-size-xs;
+  }
+}
+
+.care-add {
+  &__interval.select {
+    width: auto;
+    flex-shrink: 0;
+    padding: 9px 8px;
+    font-size: $font-size-sm;
   }
 }
 
@@ -1194,6 +1314,24 @@
 
   .field-row {
     grid-template-columns: 1fr;
+  }
+
+  .care-add {
+    flex-wrap: wrap;
+
+    input {
+      flex-basis: 100%;
+    }
+
+    &__interval.select {
+      flex: 1;
+    }
+  }
+
+  // できることと違い、ボタンが小さいので横並びのままにする
+  .care-task {
+    flex-direction: row;
+    align-items: center;
   }
 
   .manual-row {

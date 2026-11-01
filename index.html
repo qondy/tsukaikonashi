@@ -57,6 +57,15 @@
     </header>
 
     <main class="app-main">
+      <!-- お手入れの時期 -->
+      <section id="care-section" class="next next--care card-surface hidden" aria-labelledby="care-title">
+        <div class="next__head">
+          <h2 class="next__title" id="care-title"><svg width="20" height="20" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M32 10 C32 10 16 29 16 40 C16 49 23 55 32 55 C41 55 48 49 48 40 C48 29 32 10 32 10 Z"/><path d="M25 41 C25 45 28 48 32 48"/></svg>お手入れの時期です</h2>
+          <span id="care-more" class="next__more"></span>
+        </div>
+        <ul id="care-list" class="next__list"></ul>
+      </section>
+
       <!-- 次に試すこと -->
       <section id="next-section" class="next card-surface hidden" aria-labelledby="next-title">
         <div class="next__head">
@@ -154,6 +163,21 @@
         <form class="feature-add" id="feature-add-form" novalidate>
           <input type="text" id="input-feature-new" maxlength="80" placeholder="例：タイマー予約" autocomplete="off" aria-label="できることを追加" />
           <button type="submit" class="btn btn--primary btn--sm" id="btn-feature-add">追加</button>
+        </form>
+      </section>
+
+      <section class="detail__section">
+        <div class="detail__section-head">
+          <h3 class="detail__section-title">お手入れ・メンテナンス</h3>
+          <span class="detail__section-sub" id="detail-care-total"></span>
+        </div>
+        <p class="detail__hint">周期を決めておくと、時期が来たら一覧の上でお知らせします。済んだら「やった」。</p>
+        <ul class="feature-list" id="detail-care"></ul>
+        <div class="care-suggest" id="care-suggest"></div>
+        <form class="feature-add care-add" id="care-add-form" novalidate>
+          <input type="text" id="input-care-new" maxlength="40" placeholder="例：端子のホコリ取り" autocomplete="off" aria-label="お手入れを追加" />
+          <select id="select-care-new" class="select care-add__interval" aria-label="お手入れの周期"></select>
+          <button type="submit" class="btn btn--primary btn--sm" id="btn-care-add">追加</button>
         </form>
       </section>
 
@@ -296,6 +320,43 @@
         <div class="modal__actions-right">
           <button type="button" id="btn-feature-cancel" class="btn btn--ghost">キャンセル</button>
           <button type="submit" id="btn-feature-save" class="btn btn--primary">保存する</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <!-- お手入れの編集 -->
+  <div id="care-overlay" class="dialog-overlay">
+    <form id="care-form" class="modal" novalidate>
+      <div class="modal__head">
+        <div class="modal__title">お手入れを編集</div>
+        <button type="button" id="btn-care-close" class="modal__close" aria-label="閉じる">&times;</button>
+      </div>
+      <div class="field field--compact">
+        <label class="field__label" for="input-care-text">お手入れの内容</label>
+        <input type="text" id="input-care-text" maxlength="40" autocomplete="off" />
+      </div>
+      <div class="field-row">
+        <div class="field field--compact">
+          <label class="field__label" for="select-care-interval">周期</label>
+          <select id="select-care-interval" class="select"></select>
+        </div>
+        <div class="field field--compact">
+          <label class="field__label" for="input-care-last">前回やった日</label>
+          <input type="date" id="input-care-last" />
+        </div>
+      </div>
+      <div class="field field--compact">
+        <label class="field__label" for="input-care-note">やり方・使う道具<span class="field__hint">任意</span></label>
+        <textarea id="input-care-note" rows="3" maxlength="300" placeholder="例：乾いたマイクロファイバークロスで拭く。アルコールは使わない"></textarea>
+      </div>
+      <div class="modal__actions modal__actions--split">
+        <div class="modal__actions-left">
+          <button type="button" id="btn-care-delete" class="btn btn--ghost is-danger">削除</button>
+        </div>
+        <div class="modal__actions-right">
+          <button type="button" id="btn-care-cancel" class="btn btn--ghost">キャンセル</button>
+          <button type="submit" id="btn-care-save" class="btn btn--primary">保存する</button>
         </div>
       </div>
     </form>

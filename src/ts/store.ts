@@ -2,7 +2,7 @@ import {
   collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc, getDoc, writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Category, Feature, FeatureStatus, Item, ItemData, LinkKind, ManualLink } from './types';
+import { CareTask, Category, Feature, FeatureStatus, Item, ItemData, LinkKind, ManualLink } from './types';
 import { isSafeImageDataUrl, MAX_PHOTO_CHARS, MAX_THUMB_CHARS } from './image';
 
 export const MAX_NAME = 60;
@@ -11,6 +11,12 @@ export const MAX_MEMO = 2000;
 export const MAX_FEATURES = 60;
 export const MAX_FEATURE_TEXT = 80;
 export const MAX_FEATURE_NOTE = 300;
+export const MAX_CARE = 20;
+export const MAX_CARE_TEXT = 40;
+export const MAX_CARE_NOTE = 300;
+export const MAX_CARE_COUNT = 99_999;
+/** お手入れの周期の選択肢（日数）。0 は「気づいたときに」 */
+export const CARE_INTERVALS = [0, 1, 3, 7, 14, 30, 60, 90, 180, 365];
 export const MAX_MANUALS = 5;
 export const MAX_MANUAL_LABEL = 30;
 export const MAX_URL = 500;
@@ -62,6 +68,21 @@ function normFeatures(v: unknown): Feature[] {
     if (!text) return;
     const status = STATUSES.includes(o.status as FeatureStatus) ? (o.status as FeatureStatus) : 'todo';
     out.push({ id: str(o.id, 20) || newId(), text, note: str(o.note, MAX_FEATURE_NOTE), status });
+  });
+  return out;
+}
+
+function normCare(v: unknown): CareTask[] {
+  if (!Array.isArray(v)) return [];
+  const out: CareTask[] = [];
+  v.forEach((c) => {
+    if (!c || typeof c !== 'object' || out.length >= MAX_CARE) return;
+    const o = c as Record<string, unknown>;
+    const text = str(o.text, MAX_CARE_TEXT).trim();
+    if (!text) return;
+    const interval = typeof o.intervalDays === 'number' && CARE_INTERVALS.includes(o.intervalDays) ? o.intervalDays : 0;
+    const count = typeof o.doneCount === 'number' && Number.isFinite(o.doneCount) ? Math.max(0, Math.min(MAX_CARE_COUNT, Math.floor(o.doneCount))) : 0;
+    out.push({ id: str(o.id, 20) || newId(), text, note: str(o.note, MAX_CARE_NOTE), intervalDays: interval, lastDoneAt: safeDate(o.lastDoneAt), doneCount: count });
   });
   return out;
 }
@@ -128,6 +149,7 @@ export function subscribeItems(
         thumb: isSafeImageDataUrl(data.thumb, MAX_THUMB_CHARS) ? data.thumb : '',
         photoCount: typeof data.photoCount === 'number' ? Math.max(0, Math.min(MAX_PHOTOS, Math.floor(data.photoCount))) : 0,
         features: normFeatures(data.features),
+        care: normCare(data.care),
         createdAt,
         updatedAt: msOrNull(data.updatedAt) ?? createdAt,
       });
@@ -137,7 +159,7 @@ export function subscribeItems(
 }
 
 /** 製品を作成し、写真があれば別ドキュメントに保存する */
-export async function createItem(uid: string, data: ItemData, features: Feature[], photos: string[]): Promise<string> {
+export async function createItem(uid: string, data: ItemData, features: Feature[], photos: string[], care: CareTask[] = []): Promise<string> {
   const now = Date.now();
   const ref = doc(itemsCol(uid));
   const batch = writeBatch(db);
@@ -145,6 +167,7 @@ export async function createItem(uid: string, data: ItemData, features: Feature[
   batch.set(ref, {
     ...sanitize({ ...data, photoCount: clean.length }),
     features: normFeatures(features),
+    care: normCare(care),
     createdAt: now,
     updatedAt: now,
   });
@@ -169,6 +192,10 @@ export async function updateItem(uid: string, id: string, data: ItemData, photos
 
 export function updateFeatures(uid: string, id: string, features: Feature[]): Promise<void> {
   return updateDoc(itemDoc(uid, id), { features: normFeatures(features), updatedAt: Date.now() });
+}
+
+export function updateCare(uid: string, id: string, care: CareTask[]): Promise<void> {
+  return updateDoc(itemDoc(uid, id), { care: normCare(care), updatedAt: Date.now() });
 }
 
 export async function deleteItem(uid: string, id: string): Promise<void> {

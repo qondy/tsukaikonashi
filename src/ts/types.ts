@@ -7,6 +7,16 @@ export interface Feature {
   status: FeatureStatus;
 }
 
+/** お手入れ・メンテナンスの項目。intervalDays=0 は「気づいたときに」（時期の通知なし） */
+export interface CareTask {
+  id: string;
+  text: string;
+  note: string; // やり方・使う道具など
+  intervalDays: number;
+  lastDoneAt: string; // 'YYYY-MM-DD' または ''（まだ一度もやっていない）
+  doneCount: number;
+}
+
 /** リンクの種類。product=商品ページ（既定） / manual=取扱説明書 */
 export type LinkKind = 'product' | 'manual';
 
@@ -32,6 +42,7 @@ export interface ItemData {
 export interface Item extends ItemData {
   id: string;
   features: Feature[];
+  care: CareTask[];
   createdAt: number;
   updatedAt: number;
 }

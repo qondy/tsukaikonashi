@@ -6,6 +6,7 @@ export interface SampleItem {
   categoryName: string;
   memo: string;
   features: { text: string; note: string; status: FeatureStatus }[];
+  care: { text: string; note: string; intervalDays: number }[];
 }
 
 export const SAMPLE_ITEMS: SampleItem[] = [
@@ -22,6 +23,11 @@ export const SAMPLE_ITEMS: SampleItem[] = [
       { text: 'アプリでイコライザーを調整', note: '', status: 'todo' },
       { text: '置き忘れたときに場所を探す', note: '', status: 'todo' },
     ],
+    care: [
+      { text: '本体とケースを拭く', note: '乾いたやわらかい布で。皮脂汚れは軽く湿らせた布で', intervalDays: 7 },
+      { text: 'イヤーピースを外して洗う', note: '水洗いしたらしっかり乾かしてから戻す', intervalDays: 30 },
+      { text: '充電端子のホコリ取り', note: '綿棒や柔らかいブラシで。金属のものは使わない', intervalDays: 30 },
+    ],
   },
   {
     name: '電気圧力鍋',
@@ -34,6 +40,11 @@ export const SAMPLE_ITEMS: SampleItem[] = [
       { text: '無水調理', note: '', status: 'todo' },
       { text: '低温調理（サラダチキン）', note: '', status: 'todo' },
       { text: '自動メニューでパンをこねる', note: '', status: 'todo' },
+    ],
+    care: [
+      { text: 'パッキンと蒸気口を洗う', note: 'においが残りやすいので外して洗う', intervalDays: 7 },
+      { text: '本体の外側を拭く', note: '', intervalDays: 14 },
+      { text: 'パッキンの劣化をチェック', note: 'ひび・伸びがあれば交換', intervalDays: 180 },
     ],
   },
 ];

@@ -18,6 +18,10 @@ $color-status-tried-bg: #e6f1fb;
 $color-status-mastered: #1e8f55;
 $color-status-mastered-bg: #e3f5eb;
 
+// お手入れ（メンテナンス）の色。primaryには追従させない
+$color-care: #137a74;
+$color-care-bg: #e1f2f0;
+
 // Typography
 $font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
 $font-size-xs: 12px;
