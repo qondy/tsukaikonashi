@@ -234,6 +234,13 @@ function errMessage(err: unknown, fallback: string): string {
   return err instanceof Error && err.message ? err.message : fallback;
 }
 
+/** メモ欄を中身に合わせて伸ばす（rows の高さを最低限に、画面の6割まで） */
+function autoGrow(el: HTMLTextAreaElement): void {
+  el.style.height = 'auto';
+  const max = Math.round(window.innerHeight * 0.6);
+  el.style.height = `${Math.min(el.scrollHeight + 2, Math.max(max, el.offsetHeight))}px`;
+}
+
 function findItem(id: string | null): Item | undefined {
   return id ? items.find((i) => i.id === id) : undefined;
 }
@@ -826,6 +833,7 @@ function openCareEditor(careId: string): void {
   last.value = c.lastDoneAt;
   $<HTMLTextAreaElement>('input-care-note').value = c.note;
   openOverlay(careOverlay);
+  autoGrow($<HTMLTextAreaElement>('input-care-note'));
   $<HTMLInputElement>('input-care-text').focus();
 }
 
@@ -942,6 +950,7 @@ function openFeatureEditor(featureId: string): void {
   ($('input-feature-text') as HTMLInputElement).value = f.text;
   ($('input-feature-note') as HTMLTextAreaElement).value = f.note;
   openOverlay(featureOverlay);
+  autoGrow($<HTMLTextAreaElement>('input-feature-note'));
   $<HTMLInputElement>('input-feature-text').focus();
 }
 
@@ -1198,6 +1207,7 @@ function openEditor(id: string | null): void {
   renderPhotoPicker();
   editorSnapshot = editorState();
   openOverlay(editorOverlay);
+  autoGrow(memoInput);
   if (!item) nameInput.focus();
 }
 
@@ -1565,6 +1575,10 @@ function bindEvents(): void {
   $('btn-feature-close').addEventListener('click', () => closeOverlay(featureOverlay));
   $('btn-feature-cancel').addEventListener('click', () => closeOverlay(featureOverlay));
   $('btn-feature-delete').addEventListener('click', askDeleteFeature);
+
+  document.querySelectorAll<HTMLTextAreaElement>('.memo-area').forEach((el) => {
+    el.addEventListener('input', () => autoGrow(el));
+  });
 
   // お手入れ
   fillIntervalSelect($<HTMLSelectElement>('select-care-new'), 30);
