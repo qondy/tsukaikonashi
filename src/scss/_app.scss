@@ -322,6 +322,7 @@
 }
 
 .item-card {
+  position: relative;
   background: $color-surface;
   border-radius: $radius-lg;
   box-shadow: 0 2px 12px rgba($color-primary, 0.07);
@@ -412,6 +413,58 @@
     color: $color-care;
     background: $color-care-bg;
   }
+}
+
+// ===== お気に入り =====
+.fav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  color: $color-text-muted;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+
+  &__icon {
+    display: inline-flex;
+  }
+
+  &:hover:not(:disabled) {
+    color: $color-primary-ink;
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.9);
+  }
+
+  &.is-active {
+    color: $color-fav;
+
+    svg {
+      fill: currentColor;
+    }
+  }
+}
+
+// 写真の上に重ねるので白い丸で読みやすくする
+.item-card__fav {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+.detail__head-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.detail__fav {
+  background: $color-bg;
 }
 
 // ===== 使いこなし度 =====

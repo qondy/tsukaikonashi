@@ -150,6 +150,7 @@ export function subscribeItems(
         photoCount: typeof data.photoCount === 'number' ? Math.max(0, Math.min(MAX_PHOTOS, Math.floor(data.photoCount))) : 0,
         features: normFeatures(data.features),
         care: normCare(data.care),
+        favorite: data.favorite === true,
         createdAt,
         updatedAt: msOrNull(data.updatedAt) ?? createdAt,
       });
@@ -168,6 +169,7 @@ export async function createItem(uid: string, data: ItemData, features: Feature[
     ...sanitize({ ...data, photoCount: clean.length }),
     features: normFeatures(features),
     care: normCare(care),
+    favorite: false,
     createdAt: now,
     updatedAt: now,
   });
@@ -196,6 +198,11 @@ export function updateFeatures(uid: string, id: string, features: Feature[]): Pr
 
 export function updateCare(uid: string, id: string, care: CareTask[]): Promise<void> {
   return updateDoc(itemDoc(uid, id), { care: normCare(care), updatedAt: Date.now() });
+}
+
+/** お気に入りの切り替え（並び順にだけ関わるので更新日時は変えない） */
+export function updateFavorite(uid: string, id: string, favorite: boolean): Promise<void> {
+  return updateDoc(itemDoc(uid, id), { favorite });
 }
 
 export async function deleteItem(uid: string, id: string): Promise<void> {

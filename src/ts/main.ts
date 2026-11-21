@@ -7,7 +7,7 @@ import { SAMPLE_ITEMS } from './samples';
 import {
   CARE_INTERVALS, createCategory, createItem, deleteCategory, deleteItem, ensureDefaultCategories, loadPhotos,
   LINK_KIND_LABEL, MAX_CARE, MAX_CARE_TEXT, MAX_CATEGORIES, MAX_FEATURES, MAX_PRICE, MAX_FEATURE_TEXT, MAX_MANUALS, MAX_PHOTOS, newId, renameCategory,
-  safeDate, safeUrl, subscribeCategories, subscribeItems, updateCare, updateFeatures, updateItem,
+  safeDate, safeUrl, subscribeCategories, subscribeItems, updateCare, updateFavorite, updateFeatures, updateItem,
 } from './store';
 import { CareTask, Category, Feature, FeatureStatus, Item, ItemData, LinkKind, ManualLink } from './types';
 import { button, closeOverlay, iconEl, openOverlay, showToast, textEl } from './ui';
@@ -26,6 +26,7 @@ const ICON_EDIT = '<path d="M40 12 L52 24 L24 52 H12 V40 Z"/><path d="M34 18 L46
 const ICON_TRASH = '<path d="M12 18 H52"/><path d="M26 18 V12 H38 V18"/><path d="M17 18 L20 54 H44 L47 18"/>';
 const ICON_CHEVRON_L = '<path d="M40 14 L22 32 L40 50"/>';
 const ICON_CHEVRON_R = '<path d="M24 14 L42 32 L24 50"/>';
+const ICON_STAR = '<path d="M32 8 L39 23 L55 25 L43 36 L46 52 L32 44 L18 52 L21 36 L9 25 L25 23 Z"/>';
 
 const STATUS_LABEL: Record<FeatureStatus, string> = { todo: 'まだ', tried: '試した', mastered: '使いこなし' };
 const SORT_KEY = 'tsukaikonashi:sort';
@@ -268,6 +269,8 @@ function filteredItems(): Item[] {
 
   const byName = (a: Item, b: Item) => a.name.localeCompare(b.name, 'ja');
   list.sort((a, b) => {
+    // お気に入りはどの並び順でも上にまとめる
+    if (a.favorite !== b.favorite) return a.favorite ? -1 : 1;
     switch (sortKey) {
       case 'growth': {
         // 未試行の数が多い順 → 使いこなし度が低い順
@@ -389,11 +392,42 @@ function renderItemCard(item: Item): HTMLLIElement {
   if (dueCare) body.append(textEl('p', 'item-card__care', `お手入れの時期 ${dueCare}`));
 
   b.append(thumb, body);
-  li.append(b);
+  li.append(b, favoriteButton(item, 'item-card__fav'));
   return li;
 }
 
 /** まだ試していない「できること」から、次に試す候補を選ぶ */
+function favoriteButton(item: Item, className: string): HTMLButtonElement {
+  const fav = document.createElement('button');
+  fav.type = 'button';
+  fav.className = `fav-btn ${className}` + (item.favorite ? ' is-active' : '');
+  fav.setAttribute('aria-pressed', String(item.favorite));
+  fav.setAttribute('aria-label', item.favorite ? `${item.name}をお気に入りから外す` : `${item.name}をお気に入りにする`);
+  fav.dataset.track = 'favorite';
+  fav.append(iconEl(svg(ICON_STAR, 20), 'fav-btn__icon'));
+  fav.addEventListener('click', () => void toggleFavorite(item.id, fav));
+  return fav;
+}
+
+const favoriteBusy = new Set<string>();
+
+async function toggleFavorite(itemId: string, btn: HTMLButtonElement): Promise<void> {
+  const item = findItem(itemId);
+  if (!currentUser || !item || favoriteBusy.has(itemId)) return;
+  const next = !item.favorite;
+  favoriteBusy.add(itemId);
+  btn.disabled = true;
+  try {
+    await updateFavorite(currentUser.uid, itemId, next);
+    showToast(next ? 'お気に入りにしました。一覧の上の方に表示されます' : 'お気に入りから外しました');
+  } catch {
+    showToast('保存に失敗しました。通信環境を確認してください');
+  } finally {
+    favoriteBusy.delete(itemId);
+    btn.disabled = false;
+  }
+}
+
 function renderNext(): void {
   const candidates: { item: Item; feature: Feature }[] = [];
   items.forEach((item) => item.features.forEach((f) => {
@@ -578,6 +612,7 @@ function renderDetail(): void {
   const catEl = $('detail-category');
   catEl.textContent = cat || '未分類';
   $('detail-name').textContent = item.name;
+  $('detail-fav-slot').replaceChildren(favoriteButton(item, 'detail__fav'));
   const meta: string[] = [];
   if (item.maker) meta.push(item.maker);
   if (item.purchasedAt) {

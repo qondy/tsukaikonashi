@@ -43,6 +43,7 @@ export interface Item extends ItemData {
   id: string;
   features: Feature[];
   care: CareTask[];
+  favorite: boolean;
   createdAt: number;
   updatedAt: number;
 }
